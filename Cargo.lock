@@ -3,5 +3,14 @@
 version = 3
 
 [[package]]
+name = "vec2d"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05a6c08b43438f5ef373e5138c3f6ed5a823f0c961e77de8a664342c7a8e9e31"
+
+[[package]]
 name = "weiqi_pattern"
 version = "0.1.0"
+dependencies = [
+ "vec2d",
+]

@@ -8,6 +8,15 @@ pub enum Player {
     White,
 }
 
+impl Player {
+    const fn other(&self) -> Self {
+        match self {
+            Self::Black => Self::White,
+            Self::White => Self::Black,
+        }
+    }
+}
+
 pub type Intersection = Option<Player>;
 
 #[derive(Clone, Debug, PartialEq, Copy)]
@@ -187,6 +196,71 @@ impl Pattern {
 
     fn height(&self) -> usize {
         self.size().height
+    }
+
+    pub fn apply_variation(
+        &self,
+        PatternVariator {
+            swap_colours,
+            reflect,
+            rotation,
+        }: PatternVariator,
+    ) -> Self {
+        let mut varied_pattern = self.rotate(&rotation);
+        if reflect {
+            varied_pattern = varied_pattern.reflect();
+        }
+        if swap_colours {
+            varied_pattern = varied_pattern.swap_colours();
+        }
+        varied_pattern
+    }
+
+    fn reflect(self) -> Self {
+        let pattern = {
+            // pre-allocate and prepare the intersections vector
+            let mut pattern_src = Vec::<Intersection>::with_capacity(self.size().area());
+            // set to correct length
+            pattern_src.resize(self.size().area(), None);
+
+            // populate the intersections vector
+            for (Coord { x: old_x, y }, intersection) in self.pattern.iter() {
+                let new_x = self
+                    .width()
+                    .checked_sub(1)
+                    .expect("width should never be zero")
+                    .checked_sub(old_x)
+                    .expect("x coordinate should always be less than width");
+
+                let new_index = self
+                    .width()
+                    .checked_mul(y)
+                    .expect("if old pattern existed then this must be within valid usize range")
+                    .checked_add(new_x)
+                    .expect("if old pattern existed then this must be within valid usize range");
+                pattern_src[new_index] = intersection.clone();
+            }
+
+            // create the new pattern
+            Vec2D::from_vec(self.size(), pattern_src).expect("should be correct size")
+        };
+
+        Self {
+            edges: self.edges.rotate_quarter(),
+            pattern,
+        }
+    }
+
+    fn swap_colours(&self) -> Self {
+        let pattern = {
+            let swapped_src = self
+                .pattern
+                .iter()
+                .map(|(_, intersection)| intersection.as_ref().map(|player| player.other()))
+                .collect();
+            Vec2D::from_vec(self.size(), swapped_src).expect("should be correct size")
+        };
+        Self { pattern, ..*self }
     }
 }
 

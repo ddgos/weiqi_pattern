@@ -194,7 +194,7 @@ trait Rotate
 where
     Self: Sized + Clone,
 {
-    fn rotate(&self, rotation: Rotation) -> Self {
+    fn rotate(&self, rotation: &Rotation) -> Self {
         match rotation {
             Rotation::None => self.clone(),
             Rotation::Quarter => self.rotate_quarter(),
@@ -286,7 +286,7 @@ mod tests {
             south: false,
             west: false,
         };
-        let no_rotation = edges.rotate(Rotation::None);
+        let no_rotation = edges.rotate(&Rotation::None);
         let full_rotation = edges.rotate_half().rotate_half();
         assert_eq!(no_rotation, full_rotation)
     }
@@ -295,7 +295,7 @@ mod tests {
     fn pattern_rotate_works_360() {
         let pattern = Pattern::from_str(concat!("ne;5;4;", ".x...", "..o..", ".o..x", "..x..",))
             .expect("should be valid pattern");
-        let no_rotation = pattern.rotate(Rotation::None);
+        let no_rotation = pattern.rotate(&Rotation::None);
         let full_rotation = pattern.rotate_half().rotate_half();
         assert_eq!(no_rotation, full_rotation)
     }

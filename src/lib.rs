@@ -1,7 +1,8 @@
 use std::{num::ParseIntError, str::FromStr};
 
-use vec2d::{Size, Vec2D};
+use vec2d::{Coord, Size, Vec2D};
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum Player {
     Black,
     White,
@@ -9,7 +10,7 @@ pub enum Player {
 
 pub type Intersection = Option<Player>;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Copy)]
 pub struct Edges {
     pub north: bool,
     pub east: bool,
@@ -28,9 +29,65 @@ impl Rotate for Edges {
     }
 }
 
+#[derive(PartialEq, Debug)]
 pub struct Pattern {
     pub edges: Edges,
     pub pattern: Vec2D<Intersection>,
+}
+
+impl Clone for Pattern {
+    fn clone(&self) -> Self {
+        let pattern = Vec2D::from_vec(
+            self.size(),
+            self.pattern.iter().map(|(_, i)| (*i).clone()).collect(),
+        )
+        .expect("should be correct size");
+        Self { pattern, ..*self }
+    }
+}
+
+impl Rotate for Pattern {
+    fn rotate_quarter(&self) -> Self {
+        let pattern = {
+            // figure out sizes
+            let old_size = self.size();
+            let new_size = Size {
+                width: old_size.height,
+                height: old_size.width,
+            };
+
+            // pre-allocate and prepare the intersections vector
+            let mut pattern_src = Vec::<Intersection>::with_capacity(new_size.area());
+            // set to correct length
+            pattern_src.resize(new_size.area(), None);
+
+            // populate the intersections vector
+            for (Coord { x: old_x, y: old_y }, intersection) in self.pattern.iter() {
+                let new_x = old_size
+                    .height
+                    .checked_sub(1)
+                    .expect("height should never be zero")
+                    .checked_sub(old_y)
+                    .expect("y coordinate should always be less than height");
+                let new_y = old_x;
+                let new_index = new_size
+                    .width
+                    .checked_mul(new_y)
+                    .expect("if old pattern existed then this must be within valid usize range")
+                    .checked_add(new_x)
+                    .expect("if old pattern existed then this must be within valid usize range");
+                pattern_src[new_index] = intersection.clone();
+            }
+
+            // create the new pattern
+            Vec2D::from_vec(new_size, pattern_src).expect("should be correct size")
+        };
+
+        Self {
+            edges: self.edges.rotate_quarter(),
+            pattern,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -172,6 +229,8 @@ pub struct PatternVariator {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use crate::{Edges, Pattern, PatternParseError, Rotate, Rotation};
 
     #[test]
@@ -230,5 +289,25 @@ mod tests {
         let no_rotation = edges.rotate(Rotation::None);
         let full_rotation = edges.rotate_half().rotate_half();
         assert_eq!(no_rotation, full_rotation)
+    }
+
+    #[test]
+    fn pattern_rotate_works_360() {
+        let pattern = Pattern::from_str(concat!("ne;5;4;", ".x...", "..o..", ".o..x", "..x..",))
+            .expect("should be valid pattern");
+        let no_rotation = pattern.rotate(Rotation::None);
+        let full_rotation = pattern.rotate_half().rotate_half();
+        assert_eq!(no_rotation, full_rotation)
+    }
+    #[test]
+    fn pattern_rotate_works_quarter() {
+        let original_pattern =
+            Pattern::from_str(concat!("ne;5;4;", ".x...", "..o..", ".o..x", "..x..",))
+                .expect("should be valid pattern");
+        let expected_pattern =
+            Pattern::from_str(concat!("es;4;5;", "....", ".o.x", "x.o.", "....", ".x..",))
+                .expect("should be valid pattern");
+        let rotated_original = original_pattern.rotate_quarter();
+        assert_eq!(rotated_original, expected_pattern)
     }
 }

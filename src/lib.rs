@@ -9,11 +9,23 @@ pub enum Player {
 
 pub type Intersection = Option<Player>;
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct Edges {
     pub north: bool,
     pub east: bool,
     pub south: bool,
     pub west: bool,
+}
+
+impl Rotate for Edges {
+    fn rotate_quarter(&self) -> Self {
+        Self {
+            north: self.west,
+            east: self.north,
+            south: self.east,
+            west: self.south,
+        }
+    }
 }
 
 pub struct Pattern {
@@ -160,7 +172,7 @@ pub struct PatternVariator {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Pattern, PatternParseError};
+    use crate::{Edges, Pattern, PatternParseError, Rotate, Rotation};
 
     #[test]
     fn good_pattern_repr_works() {
@@ -185,5 +197,38 @@ mod tests {
         let pattern_parse_result: Result<Pattern, _> = pattern_str.parse();
 
         assert!(pattern_parse_result.is_err_and(|e| e == PatternParseError::BadSize))
+    }
+
+    #[test]
+    fn edges_rotate_works_quarter() {
+        let edges = Edges {
+            north: true,
+            east: false,
+            south: false,
+            west: false,
+        };
+        let rotated_edges = edges.rotate_quarter();
+        assert_eq!(
+            rotated_edges,
+            Edges {
+                north: false,
+                east: true,
+                south: false,
+                west: false
+            }
+        )
+    }
+
+    #[test]
+    fn edges_rotate_works_360() {
+        let edges = Edges {
+            north: true,
+            east: false,
+            south: false,
+            west: false,
+        };
+        let no_rotation = edges.rotate(Rotation::None);
+        let full_rotation = edges.rotate_half().rotate_half();
+        assert_eq!(no_rotation, full_rotation)
     }
 }

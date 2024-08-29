@@ -127,10 +127,10 @@ impl FromStr for Pattern {
         let size = {
             let width = width_part
                 .parse()
-                .map_err(|e| PatternParseError::WidthParseError(e))?;
+                .map_err(PatternParseError::WidthParseError)?;
             let height = height_part
                 .parse()
-                .map_err(|e| PatternParseError::HeightParseError(e))?;
+                .map_err(PatternParseError::HeightParseError)?;
             Size { width, height }
         };
         let pattern = {

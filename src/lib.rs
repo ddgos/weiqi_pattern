@@ -121,6 +121,30 @@ impl Pattern {
     }
 }
 
+trait Rotate
+where
+    Self: Sized + Clone,
+{
+    fn rotate(&self, rotation: Rotation) -> Self {
+        match rotation {
+            Rotation::None => self.clone(),
+            Rotation::Quarter => self.rotate_quarter(),
+            Rotation::Half => self.rotate_half(),
+            Rotation::ThreeQuarters => self.rotate_three_quarters(),
+        }
+    }
+
+    fn rotate_quarter(&self) -> Self;
+
+    fn rotate_half(&self) -> Self {
+        self.rotate_quarter().rotate_quarter()
+    }
+
+    fn rotate_three_quarters(&self) -> Self {
+        self.rotate_half().rotate_quarter()
+    }
+}
+
 pub enum Rotation {
     None,
     Quarter,

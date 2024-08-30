@@ -249,7 +249,7 @@ impl Pattern {
             rotation,
         }: &PatternVariator,
     ) -> Self {
-        let mut varied_pattern = self.rotate(&rotation);
+        let mut varied_pattern = self.rotate(rotation);
         if *reflect {
             varied_pattern = varied_pattern.reflect();
         }

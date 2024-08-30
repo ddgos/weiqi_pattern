@@ -273,12 +273,45 @@ impl Pattern {
 
     pub fn positioned_match_cost(&self, haystack: &Pattern, offset: Coord) -> Option<u64> {
         // extract correct region of haystack
+        let min_coord = offset;
+        let exclusive_max_coord = offset + Coord::new(self.width(), self.height());
         let haystack_region = Rect::new(
-            offset,
-            // max_coord is inclusive
-            offset + Coord::new(self.width() - 1, self.height() - 1),
+            min_coord,
+            // this argument is required to be inclusive
+            Coord {
+                x: exclusive_max_coord.x - 1,
+                y: exclusive_max_coord.y - 1,
+            },
         )
         .expect("larger coord should be larger than smaller coord");
+
+        // check the edge conditions are satisfied
+        let against_north = min_coord.y == 0;
+        let against_east = exclusive_max_coord.x == haystack.width();
+        let against_south = exclusive_max_coord.y == haystack.height();
+        let against_west = min_coord.x == 0;
+
+        // if the needle is up against the haystack edges, check the edges match
+        let mismatched_north = self.edges.north != haystack.edges.north;
+        let mismatched_east = self.edges.east != haystack.edges.east;
+        let mismatched_south = self.edges.south != haystack.edges.south;
+        let mismatched_west = self.edges.west != haystack.edges.west;
+        if (against_north && mismatched_north)
+            || (against_east && mismatched_east)
+            || (against_south && mismatched_south)
+            || (against_west && mismatched_west)
+        {
+            return None;
+        }
+
+        // if the needle is not against the edge, check the needle edge is clear
+        if (!against_north && self.edges.north)
+            || (!against_east && self.edges.east)
+            || (!against_south && self.edges.south)
+            || (!against_west && self.edges.west)
+        {
+            return None;
+        }
 
         // pair up intersections, apply cost and sum
         let match_cost = zip(
@@ -623,7 +656,7 @@ mod tests {
     #[test]
     fn find_minimum_match_cost_works() {
         let needle = Pattern::from_str(concat!(
-            "es;5;6;", ".....", "..x..", ".....", ".o.x.", "..o..", ".....",
+            "es;5;7;", ".....", "..x..", ".....", ".o.x.", "..o..", ".....", ".....",
         ))
         .expect("should be valid pattern");
         let haystack = Pattern::from_str(concat!(
@@ -651,6 +684,29 @@ mod tests {
         assert_eq!(match_cost, 0);
         assert_eq!(variation, expected_variation);
         assert_eq!(position, Coord::new(3, 0));
+    }
+
+    #[test]
+    fn find_minimum_match_cost_bad_edges_fails() {
+        let needle = Pattern::from_str(concat!(
+            "ns;5;6;", ".....", "..x..", ".....", ".o.x.", "..o..", ".....",
+        ))
+        .expect("should be valid pattern");
+        let haystack = Pattern::from_str(concat!(
+            "ne;10;8;",
+            "..........",
+            "......o...",
+            ".o..o..x..",
+            "......x...",
+            "..........",
+            ".......x..",
+            "..........",
+            "..........",
+        ))
+        .expect("should be valid pattern");
+
+        let maybe_match = needle.minimum_positioned_variation_match_cost(&haystack);
+        assert_eq!(maybe_match, None);
     }
 
     #[test]

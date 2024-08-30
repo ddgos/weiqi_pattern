@@ -151,11 +151,6 @@ pub enum PatternParseError {
     BadSize,
 }
 
-#[derive(Debug)]
-enum MatchCostError {
-    IncompatiblePosition,
-}
-
 impl FromStr for Pattern {
     type Err = PatternParseError;
 
@@ -252,13 +247,13 @@ impl Pattern {
             swap_colours,
             reflect,
             rotation,
-        }: PatternVariator,
+        }: &PatternVariator,
     ) -> Self {
         let mut varied_pattern = self.rotate(&rotation);
-        if reflect {
+        if *reflect {
             varied_pattern = varied_pattern.reflect();
         }
-        if swap_colours {
+        if *swap_colours {
             varied_pattern = varied_pattern.swap_colours();
         }
         varied_pattern
@@ -276,11 +271,7 @@ impl Pattern {
         Self { pattern, ..*self }
     }
 
-    fn positioned_match_cost(
-        &self,
-        haystack: &Pattern,
-        offset: Coord,
-    ) -> Result<u64, MatchCostError> {
+    pub fn positioned_match_cost(&self, haystack: &Pattern, offset: Coord) -> Option<u64> {
         // extract correct region of haystack
         let haystack_region = Rect::new(
             offset,
@@ -288,15 +279,14 @@ impl Pattern {
             offset + Coord::new(self.width() - 1, self.height() - 1),
         )
         .expect("larger coord should be larger than smaller coord");
-        let haystack_iter = match haystack.pattern.rect_iter(haystack_region) {
-            Some(good_iter) => good_iter,
-            None => return Result::Err(MatchCostError::IncompatiblePosition),
-        };
 
         // pair up intersections, apply cost and sum
         let match_cost = zip(
             self.pattern.iter().map(|(_, intersection)| intersection),
-            haystack_iter.map(|(_, intersection)| intersection),
+            haystack
+                .pattern
+                .rect_iter(haystack_region)?
+                .map(|(_, intersection)| intersection),
         )
         .map(|intersection_combination| match intersection_combination {
             (None, Some(_)) | (Some(_), None) => 1,
@@ -306,7 +296,32 @@ impl Pattern {
         })
         .sum();
 
-        Ok(match_cost)
+        Some(match_cost)
+    }
+
+    pub fn minimum_positioned_match_cost(&self, haystack: &Pattern) -> Option<(Coord, u64)> {
+        let possible_offsets = haystack.pattern.iter().map(|(coord, _)| coord);
+        possible_offsets
+            .filter_map(|offset| {
+                self.positioned_match_cost(haystack, offset)
+                    .map(|cost| (offset, cost))
+            })
+            .min_by_key(|(_, cost)| *cost)
+    }
+
+    pub fn minimum_positioned_variation_match_cost(
+        &self,
+        haystack: &Pattern,
+    ) -> Option<(Coord, PatternVariator, u64)> {
+        PatternVariator::all()
+            .iter()
+            .filter_map(|variator| {
+                let varied_needle = self.apply_variation(variator);
+                varied_needle
+                    .minimum_positioned_match_cost(haystack)
+                    .map(|(offset, cost)| (offset, *variator, cost))
+            })
+            .min_by_key(|(_, _, cost)| *cost)
     }
 }
 
@@ -336,6 +351,7 @@ where
     fn reflect(&self) -> Self;
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Rotation {
     None,
     Quarter,
@@ -343,10 +359,98 @@ pub enum Rotation {
     ThreeQuarters,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct PatternVariator {
     pub swap_colours: bool,
     pub reflect: bool,
     pub rotation: Rotation,
+}
+
+impl PatternVariator {
+    fn all() -> [PatternVariator; 16] {
+        [
+            PatternVariator {
+                swap_colours: false,
+                reflect: false,
+                rotation: Rotation::None,
+            },
+            PatternVariator {
+                swap_colours: false,
+                reflect: true,
+                rotation: Rotation::None,
+            },
+            PatternVariator {
+                swap_colours: false,
+                reflect: false,
+                rotation: Rotation::None,
+            },
+            PatternVariator {
+                swap_colours: false,
+                reflect: true,
+                rotation: Rotation::None,
+            },
+            PatternVariator {
+                swap_colours: false,
+                reflect: false,
+                rotation: Rotation::Quarter,
+            },
+            PatternVariator {
+                swap_colours: false,
+                reflect: true,
+                rotation: Rotation::Quarter,
+            },
+            PatternVariator {
+                swap_colours: false,
+                reflect: false,
+                rotation: Rotation::Quarter,
+            },
+            PatternVariator {
+                swap_colours: false,
+                reflect: true,
+                rotation: Rotation::Quarter,
+            },
+            PatternVariator {
+                swap_colours: true,
+                reflect: false,
+                rotation: Rotation::Half,
+            },
+            PatternVariator {
+                swap_colours: true,
+                reflect: true,
+                rotation: Rotation::Half,
+            },
+            PatternVariator {
+                swap_colours: true,
+                reflect: false,
+                rotation: Rotation::Half,
+            },
+            PatternVariator {
+                swap_colours: true,
+                reflect: true,
+                rotation: Rotation::Half,
+            },
+            PatternVariator {
+                swap_colours: true,
+                reflect: false,
+                rotation: Rotation::ThreeQuarters,
+            },
+            PatternVariator {
+                swap_colours: true,
+                reflect: true,
+                rotation: Rotation::ThreeQuarters,
+            },
+            PatternVariator {
+                swap_colours: true,
+                reflect: false,
+                rotation: Rotation::ThreeQuarters,
+            },
+            PatternVariator {
+                swap_colours: true,
+                reflect: true,
+                rotation: Rotation::ThreeQuarters,
+            },
+        ]
+    }
 }
 
 #[cfg(test)]
@@ -355,7 +459,7 @@ mod tests {
 
     use vec2d::Coord;
 
-    use crate::{Edges, Pattern, PatternParseError, Rotation, Transform};
+    use crate::{Edges, Pattern, PatternParseError, PatternVariator, Rotation, Transform};
 
     #[test]
     fn good_pattern_repr_works() {
@@ -474,5 +578,88 @@ mod tests {
             .positioned_match_cost(&haystack, Coord::new(1, 1))
             .expect("needle should fit within haystack at this offset");
         assert_eq!(match_cost, 2)
+    }
+
+    #[test]
+    fn simple_minimum_match_cost_works() {
+        let needle = Pattern::from_str(concat!(";3;3;", "...", ".x.", "...",))
+            .expect("should be valid pattern");
+        let haystack = Pattern::from_str(concat!(
+            ";5;5;", ".....", ".....", "..x..", ".....", ".....",
+        ))
+        .expect("should be valid pattern");
+
+        let (position, match_cost) = needle
+            .minimum_positioned_match_cost(&haystack)
+            .expect("needle should fit within haystack");
+        assert_eq!(match_cost, 0);
+        assert_eq!(position, Coord::new(1, 1));
+    }
+
+    #[test]
+    fn simple_find_minimum_match_cost_works() {
+        let needle = Pattern::from_str(concat!(";3;3;", "...", ".x.", "...",))
+            .expect("should be valid pattern");
+        let haystack = Pattern::from_str(concat!(
+            ";5;5;", ".....", ".....", "..x..", ".....", ".....",
+        ))
+        .expect("should be valid pattern");
+
+        let (position, variator, match_cost) = needle
+            .minimum_positioned_variation_match_cost(&haystack)
+            .expect("needle should fit within haystack");
+        assert_eq!(match_cost, 0);
+        assert_eq!(
+            variator,
+            PatternVariator {
+                swap_colours: false,
+                reflect: false,
+                rotation: Rotation::None
+            }
+        );
+        assert_eq!(position, Coord::new(1, 1));
+    }
+
+    #[test]
+    fn find_minimum_match_cost_works() {
+        let needle = Pattern::from_str(concat!(
+            "es;5;6;", ".....", "..x..", ".....", ".o.x.", "..o..", ".....",
+        ))
+        .expect("should be valid pattern");
+        let haystack = Pattern::from_str(concat!(
+            "ne;10;8;",
+            "..........",
+            "......o...",
+            ".o..o..x..",
+            "......x...",
+            "..........",
+            ".......x..",
+            "..........",
+            "..........",
+        ))
+        .expect("should be valid pattern");
+
+        let expected_variation = PatternVariator {
+            swap_colours: true,
+            reflect: false,
+            rotation: Rotation::ThreeQuarters,
+        };
+
+        let (position, variation, match_cost) = needle
+            .minimum_positioned_variation_match_cost(&haystack)
+            .expect("needle should fit within haystack");
+        assert_eq!(match_cost, 0);
+        assert_eq!(variation, expected_variation);
+        assert_eq!(position, Coord::new(3, 0));
+    }
+
+    #[test]
+    fn all_variations_includes_this_one() {
+        let expected_variation = PatternVariator {
+            swap_colours: true,
+            reflect: false,
+            rotation: Rotation::ThreeQuarters,
+        };
+        assert!(PatternVariator::all().contains(&expected_variation));
     }
 }

@@ -1,6 +1,6 @@
-use std::{num::ParseIntError, str::FromStr};
+use std::{iter::zip, num::ParseIntError, str::FromStr};
 
-use vec2d::{Coord, Size, Vec2D};
+use vec2d::{Coord, Rect, Size, Vec2D};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Player {
@@ -151,6 +151,11 @@ pub enum PatternParseError {
     BadSize,
 }
 
+#[derive(Debug)]
+enum MatchCostError {
+    IncompatiblePosition,
+}
+
 impl FromStr for Pattern {
     type Err = PatternParseError;
 
@@ -270,6 +275,39 @@ impl Pattern {
         };
         Self { pattern, ..*self }
     }
+
+    fn positioned_match_cost(
+        &self,
+        haystack: &Pattern,
+        offset: Coord,
+    ) -> Result<u64, MatchCostError> {
+        // extract correct region of haystack
+        let haystack_region = Rect::new(
+            offset,
+            // max_coord is inclusive
+            offset + Coord::new(self.width() - 1, self.height() - 1),
+        )
+        .expect("larger coord should be larger than smaller coord");
+        let haystack_iter = match haystack.pattern.rect_iter(haystack_region) {
+            Some(good_iter) => good_iter,
+            None => return Result::Err(MatchCostError::IncompatiblePosition),
+        };
+
+        // pair up intersections, apply cost and sum
+        let match_cost = zip(
+            self.pattern.iter().map(|(_, intersection)| intersection),
+            haystack_iter.map(|(_, intersection)| intersection),
+        )
+        .map(|intersection_combination| match intersection_combination {
+            (None, Some(_)) | (Some(_), None) => 1,
+            (Some(Player::Black), Some(Player::White))
+            | (Some(Player::White), Some(Player::Black)) => 2,
+            _ => 0,
+        })
+        .sum();
+
+        Ok(match_cost)
+    }
 }
 
 trait Transform
@@ -314,6 +352,8 @@ pub struct PatternVariator {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+
+    use vec2d::Coord;
 
     use crate::{Edges, Pattern, PatternParseError, Rotation, Transform};
 
@@ -406,5 +446,33 @@ mod tests {
                 .expect("should be valid pattern");
         let reflected_original = original_pattern.reflect();
         assert_eq!(reflected_original, expected_pattern)
+    }
+
+    #[test]
+    fn simple_positioned_match_cost_works() {
+        let needle = Pattern::from_str(concat!(";3;3;", "...", ".x.", "...",))
+            .expect("should be valid pattern");
+        let haystack = Pattern::from_str(concat!(
+            ";5;5;", ".....", ".....", "..x..", ".....", ".....",
+        ))
+        .expect("should be valid pattern");
+
+        let match_cost_when_centered = needle
+            .positioned_match_cost(&haystack, Coord::new(1, 1))
+            .expect("needle should fit within haystack at this offset");
+        assert_eq!(match_cost_when_centered, 0)
+    }
+
+    #[test]
+    fn another_positioned_match_cost_works() {
+        let needle =
+            Pattern::from_str(concat!(";3;2;", "xo.", ".ox",)).expect("should be valid pattern");
+        let haystack = Pattern::from_str(concat!(";5;4;", ".....", ".xx..", "..ox.", ".....",))
+            .expect("should be valid pattern");
+
+        let match_cost = needle
+            .positioned_match_cost(&haystack, Coord::new(1, 1))
+            .expect("needle should fit within haystack at this offset");
+        assert_eq!(match_cost, 2)
     }
 }

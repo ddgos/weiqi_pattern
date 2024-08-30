@@ -27,13 +27,21 @@ pub struct Edges {
     pub west: bool,
 }
 
-impl Rotate for Edges {
+impl Transform for Edges {
     fn rotate_quarter(&self) -> Self {
         Self {
             north: self.west,
             east: self.north,
             south: self.east,
             west: self.south,
+        }
+    }
+
+    fn reflect(&self) -> Self {
+        Self {
+            east: self.west,
+            west: self.east,
+            ..*self
         }
     }
 }
@@ -55,7 +63,7 @@ impl Clone for Pattern {
     }
 }
 
-impl Rotate for Pattern {
+impl Transform for Pattern {
     fn rotate_quarter(&self) -> Self {
         let pattern = {
             // figure out sizes
@@ -94,6 +102,41 @@ impl Rotate for Pattern {
 
         Self {
             edges: self.edges.rotate_quarter(),
+            pattern,
+        }
+    }
+
+    fn reflect(&self) -> Self {
+        let pattern = {
+            // pre-allocate and prepare the intersections vector
+            let mut pattern_src = Vec::<Intersection>::with_capacity(self.size().area());
+            // set to correct length
+            pattern_src.resize(self.size().area(), None);
+
+            // populate the intersections vector
+            for (Coord { x: old_x, y }, intersection) in self.pattern.iter() {
+                let new_x = self
+                    .width()
+                    .checked_sub(1)
+                    .expect("width should never be zero")
+                    .checked_sub(old_x)
+                    .expect("x coordinate should always be less than width");
+
+                let new_index = self
+                    .width()
+                    .checked_mul(y)
+                    .expect("if old pattern existed then this must be within valid usize range")
+                    .checked_add(new_x)
+                    .expect("if old pattern existed then this must be within valid usize range");
+                pattern_src[new_index] = intersection.clone();
+            }
+
+            // create the new pattern
+            Vec2D::from_vec(self.size(), pattern_src).expect("should be correct size")
+        };
+
+        Self {
+            edges: self.edges.reflect(),
             pattern,
         }
     }
@@ -216,41 +259,6 @@ impl Pattern {
         varied_pattern
     }
 
-    fn reflect(self) -> Self {
-        let pattern = {
-            // pre-allocate and prepare the intersections vector
-            let mut pattern_src = Vec::<Intersection>::with_capacity(self.size().area());
-            // set to correct length
-            pattern_src.resize(self.size().area(), None);
-
-            // populate the intersections vector
-            for (Coord { x: old_x, y }, intersection) in self.pattern.iter() {
-                let new_x = self
-                    .width()
-                    .checked_sub(1)
-                    .expect("width should never be zero")
-                    .checked_sub(old_x)
-                    .expect("x coordinate should always be less than width");
-
-                let new_index = self
-                    .width()
-                    .checked_mul(y)
-                    .expect("if old pattern existed then this must be within valid usize range")
-                    .checked_add(new_x)
-                    .expect("if old pattern existed then this must be within valid usize range");
-                pattern_src[new_index] = intersection.clone();
-            }
-
-            // create the new pattern
-            Vec2D::from_vec(self.size(), pattern_src).expect("should be correct size")
-        };
-
-        Self {
-            edges: self.edges.rotate_quarter(),
-            pattern,
-        }
-    }
-
     fn swap_colours(&self) -> Self {
         let pattern = {
             let swapped_src = self
@@ -264,7 +272,7 @@ impl Pattern {
     }
 }
 
-trait Rotate
+trait Transform
 where
     Self: Sized + Clone,
 {
@@ -286,6 +294,8 @@ where
     fn rotate_three_quarters(&self) -> Self {
         self.rotate_half().rotate_quarter()
     }
+
+    fn reflect(&self) -> Self;
 }
 
 pub enum Rotation {
@@ -305,7 +315,7 @@ pub struct PatternVariator {
 mod tests {
     use std::str::FromStr;
 
-    use crate::{Edges, Pattern, PatternParseError, Rotate, Rotation};
+    use crate::{Edges, Pattern, PatternParseError, Rotation, Transform};
 
     #[test]
     fn good_pattern_repr_works() {
@@ -373,6 +383,7 @@ mod tests {
         let full_rotation = pattern.rotate_half().rotate_half();
         assert_eq!(no_rotation, full_rotation)
     }
+
     #[test]
     fn pattern_rotate_works_quarter() {
         let original_pattern =
@@ -383,5 +394,17 @@ mod tests {
                 .expect("should be valid pattern");
         let rotated_original = original_pattern.rotate_quarter();
         assert_eq!(rotated_original, expected_pattern)
+    }
+
+    #[test]
+    fn pattern_reflect_works() {
+        let original_pattern =
+            Pattern::from_str(concat!("ne;5;4;", ".x...", "..o..", ".o..x", "..x..",))
+                .expect("should be valid pattern");
+        let expected_pattern =
+            Pattern::from_str(concat!("nw;5;4;", "...x.", "..o..", "x..o.", "..x..",))
+                .expect("should be valid pattern");
+        let reflected_original = original_pattern.reflect();
+        assert_eq!(reflected_original, expected_pattern)
     }
 }

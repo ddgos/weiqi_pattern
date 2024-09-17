@@ -151,6 +151,22 @@ pub enum PatternParseError {
     BadSize,
 }
 
+impl std::fmt::Display for PatternParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PatternParseError::InvalidStructure => f.write_str("expected structure not found"),
+            PatternParseError::WidthParseError(e) => {
+                f.write_fmt(format_args!("error while parsing width: {}", e))
+            }
+            PatternParseError::HeightParseError(e) => {
+                f.write_fmt(format_args!("error while parsing height: {}", e))
+            }
+            PatternParseError::UnexpectedIntersection => f.write_str("intersection was not [.xo]"),
+            PatternParseError::BadSize => f.write_str("number of points did not match size given"),
+        }
+    }
+}
+
 impl FromStr for Pattern {
     type Err = PatternParseError;
 
@@ -483,6 +499,179 @@ impl PatternVariator {
                 rotation: Rotation::ThreeQuarters,
             },
         ]
+    }
+}
+
+#[cfg(feature = "from_sgf")]
+#[cfg(feature = "from_sgf_cli")]
+#[derive(Debug)]
+pub enum FromSGFError {
+    ParseError(sgf_parse::SgfParseError),
+    SgfInterpretError,
+    PlayError(tiny_goban::GobanPlayError),
+}
+
+#[cfg(feature = "from_sgf")]
+#[cfg(feature = "from_sgf_cli")]
+impl From<sgf_parse::SgfParseError> for FromSGFError {
+    fn from(value: sgf_parse::SgfParseError) -> Self {
+        Self::ParseError(value)
+    }
+}
+
+#[cfg(feature = "from_sgf")]
+#[cfg(feature = "from_sgf_cli")]
+impl From<tiny_goban::GobanPlayError> for FromSGFError {
+    fn from(value: tiny_goban::GobanPlayError) -> Self {
+        Self::PlayError(value)
+    }
+}
+
+impl std::fmt::Display for FromSGFError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FromSGFError::ParseError(e) => {
+                f.write_fmt(format_args!("error while parsing sgf: {}", e))
+            }
+            FromSGFError::SgfInterpretError => f.write_str("unregistered property"),
+            FromSGFError::PlayError(_e) => f.write_fmt(format_args!("error while replaying sgf")),
+        }
+    }
+}
+
+#[cfg(feature = "from_sgf")]
+#[cfg(feature = "from_sgf_cli")]
+const RECOGNISED_PROPERTIES: [&str; 5] = ["B", "W", "AB", "AW", "AE"];
+
+#[cfg(feature = "from_sgf")]
+#[cfg(feature = "from_sgf_cli")]
+pub fn variations_from_sgf(
+    sgf_text: &str,
+) -> Result<Vec<Vec<sgf_parse::go::Prop>>, sgf_parse::SgfParseError> {
+    use sgf_parse::go::parse;
+    use std::collections::VecDeque;
+
+    let roots = parse(sgf_text)?;
+
+    // for storing variations, and the found continuation
+    let mut growing_variations = VecDeque::new();
+    // for storing variaitons that have no continuations
+    let mut finished_variations = Vec::new();
+
+    // sgf files can have multiple roots for multiple game records
+    for root in roots.into_iter() {
+        growing_variations.push_back((Vec::new(), root))
+    }
+
+    // while still variations to grow
+    while let Some((variation_so_far, this_node)) = growing_variations.pop_front() {
+        // create an extended version of the variation, with the found properties
+        // appended to the end
+        let extended_variation = {
+            let mut copied_variation = variation_so_far.clone();
+
+            for recognised_property in RECOGNISED_PROPERTIES {
+                if let Some(found_property) = this_node.get_property(recognised_property) {
+                    copied_variation.push(found_property.clone())
+                }
+            }
+
+            copied_variation
+        };
+
+        if this_node.children.is_empty() {
+            finished_variations.push(extended_variation)
+        } else {
+            for child_node in this_node.children {
+                growing_variations.push_back((extended_variation.clone(), child_node))
+            }
+        }
+    }
+    Ok(finished_variations)
+}
+
+#[cfg(feature = "from_sgf")]
+#[cfg(feature = "from_sgf_cli")]
+pub fn patterns_from_variation(
+    variation: &Vec<sgf_parse::go::Prop>,
+) -> Result<Vec<Pattern>, (Vec<Pattern>, tiny_goban::GobanPlayError)> {
+    use sgf_parse::go::{Move, Prop};
+    use tiny_goban::{Goban, KoState};
+
+    let mut patterns = Vec::new();
+    let mut goban = Goban::default();
+    for prop in variation {
+        match prop {
+            Prop::B(Move::Move(point)) => {
+                let coord = sgf_parse_point_to_goban_coord(point);
+                if let Err(e) = goban.play(&coord, tiny_goban::Player::Black) {
+                    return Err((patterns, e));
+                }
+            }
+            Prop::W(Move::Move(point)) => {
+                let coord = sgf_parse_point_to_goban_coord(point);
+                if let Err(e) = goban.play(&coord, tiny_goban::Player::White) {
+                    return Err((patterns, e));
+                }
+            }
+            Prop::AB(points) => {
+                for coord in points.into_iter().map(sgf_parse_point_to_goban_coord) {
+                    goban.set(&coord, tiny_goban::Point::Stone(tiny_goban::Player::Black))
+                }
+            }
+            Prop::AW(points) => {
+                for coord in points.into_iter().map(sgf_parse_point_to_goban_coord) {
+                    goban.set(&coord, tiny_goban::Point::Stone(tiny_goban::Player::White))
+                }
+            }
+            Prop::AE(points) => {
+                for coord in points.into_iter().map(sgf_parse_point_to_goban_coord) {
+                    goban.set(&coord, tiny_goban::Point::Clear(KoState::Otherwise))
+                }
+            }
+            _ => (),
+        }
+
+        patterns.push(goban_to_pattern(&goban));
+    }
+
+    Ok(patterns)
+}
+
+#[cfg(feature = "from_sgf")]
+#[cfg(feature = "from_sgf_cli")]
+fn sgf_parse_point_to_goban_coord(point: &sgf_parse::go::Point) -> tiny_goban::Coord {
+    use tiny_goban::Coord;
+
+    Coord::new(point.x, point.y).expect("should be in range")
+}
+
+#[cfg(feature = "from_sgf")]
+#[cfg(feature = "from_sgf_cli")]
+fn goban_to_pattern(goban: &tiny_goban::Goban) -> Pattern {
+    let pattern_src = goban
+        .points_iter()
+        .map(|goban_point| match goban_point {
+            tiny_goban::Point::Stone(tiny_goban::Player::Black) => Some(Player::Black),
+            tiny_goban::Point::Stone(tiny_goban::Player::White) => Some(Player::White),
+            tiny_goban::Point::Clear(_) => None,
+        })
+        .collect();
+    Pattern {
+        edges: Edges {
+            north: true,
+            east: true,
+            south: true,
+            west: true,
+        },
+        pattern: Vec2D::from_vec(
+            Size {
+                width: 19,
+                height: 19,
+            },
+            pattern_src,
+        )
+        .expect("should be correct size"),
     }
 }
 

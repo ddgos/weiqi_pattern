@@ -1,7 +1,21 @@
 [package]
 name = "weiqi_pattern"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
 vec2d = "0.4.1"
+tiny_goban = { git = "https://github.com/ddgos/tiny_goban", version = "0.1.2", optional = true }
+sgf-parse = { version = "4.2.1", optional = true }
+clap = { version = "4.5.17", features = ["derive"], optional = true }
+clap-stdin = { version = "0.5.1", optional = true }
+anyhow = { version = "1.0.89", optional = true }
+
+[features]
+default = [ "from_sgf_cli", "from_sgf" ]
+from_sgf = [ "dep:tiny_goban", "dep:sgf-parse" ]
+from_sgf_cli = [ "dep:tiny_goban", "dep:sgf-parse", "dep:clap", "dep:clap-stdin", "dep:anyhow" ]
+
+[[bin]]
+name = "sgf_to_patterns"
+required-features = [ "from_sgf_cli" ]

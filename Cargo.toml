@@ -12,7 +12,6 @@ clap-stdin = { version = "0.5.1", optional = true }
 anyhow = { version = "1.0.89", optional = true }
 
 [features]
-default = [ "from_sgf_cli", "from_sgf" ]
 from_sgf = [ "dep:tiny_goban", "dep:sgf-parse" ]
 from_sgf_cli = [ "dep:tiny_goban", "dep:sgf-parse", "dep:clap", "dep:clap-stdin", "dep:anyhow" ]
 

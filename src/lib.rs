@@ -610,17 +610,17 @@ pub fn patterns_from_variation(
                 }
             }
             Prop::AB(points) => {
-                for coord in points.into_iter().map(sgf_parse_point_to_goban_coord) {
+                for coord in points.iter().map(sgf_parse_point_to_goban_coord) {
                     goban.set(&coord, tiny_goban::Point::Stone(tiny_goban::Player::Black))
                 }
             }
             Prop::AW(points) => {
-                for coord in points.into_iter().map(sgf_parse_point_to_goban_coord) {
+                for coord in points.iter().map(sgf_parse_point_to_goban_coord) {
                     goban.set(&coord, tiny_goban::Point::Stone(tiny_goban::Player::White))
                 }
             }
             Prop::AE(points) => {
-                for coord in points.into_iter().map(sgf_parse_point_to_goban_coord) {
+                for coord in points.iter().map(sgf_parse_point_to_goban_coord) {
                     goban.set(&coord, tiny_goban::Point::Clear(KoState::Otherwise))
                 }
             }

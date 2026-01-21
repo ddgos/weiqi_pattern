@@ -13,7 +13,7 @@ anyhow = { version = "1.0.89", optional = true }
 
 [features]
 from_sgf = [ "dep:tiny_goban", "dep:sgf-parse" ]
-from_sgf_cli = [ "dep:tiny_goban", "dep:sgf-parse", "dep:clap", "dep:clap-stdin", "dep:anyhow" ]
+from_sgf_cli = [ "from_sgf", "dep:clap", "dep:clap-stdin", "dep:anyhow" ]
 
 [[bin]]
 name = "sgf_to_patterns"

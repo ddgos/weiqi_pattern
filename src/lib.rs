@@ -503,7 +503,6 @@ impl PatternVariator {
 }
 
 #[cfg(feature = "from_sgf")]
-#[cfg(feature = "from_sgf_cli")]
 #[derive(Debug)]
 pub enum FromSGFError {
     ParseError(sgf_parse::SgfParseError),
@@ -512,7 +511,6 @@ pub enum FromSGFError {
 }
 
 #[cfg(feature = "from_sgf")]
-#[cfg(feature = "from_sgf_cli")]
 impl From<sgf_parse::SgfParseError> for FromSGFError {
     fn from(value: sgf_parse::SgfParseError) -> Self {
         Self::ParseError(value)
@@ -520,13 +518,13 @@ impl From<sgf_parse::SgfParseError> for FromSGFError {
 }
 
 #[cfg(feature = "from_sgf")]
-#[cfg(feature = "from_sgf_cli")]
 impl From<tiny_goban::GobanPlayError> for FromSGFError {
     fn from(value: tiny_goban::GobanPlayError) -> Self {
         Self::PlayError(value)
     }
 }
 
+#[cfg(feature = "from_sgf")]
 impl std::fmt::Display for FromSGFError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -540,11 +538,9 @@ impl std::fmt::Display for FromSGFError {
 }
 
 #[cfg(feature = "from_sgf")]
-#[cfg(feature = "from_sgf_cli")]
 const RECOGNISED_PROPERTIES: [&str; 5] = ["B", "W", "AB", "AW", "AE"];
 
 #[cfg(feature = "from_sgf")]
-#[cfg(feature = "from_sgf_cli")]
 pub fn variations_from_sgf(
     sgf_text: &str,
 ) -> Result<Vec<Vec<sgf_parse::go::Prop>>, sgf_parse::SgfParseError> {
@@ -591,7 +587,6 @@ pub fn variations_from_sgf(
 }
 
 #[cfg(feature = "from_sgf")]
-#[cfg(feature = "from_sgf_cli")]
 pub fn patterns_from_variation(
     variation: &Vec<sgf_parse::go::Prop>,
 ) -> Result<Vec<Pattern>, (Vec<Pattern>, tiny_goban::GobanPlayError)> {
@@ -639,7 +634,6 @@ pub fn patterns_from_variation(
 }
 
 #[cfg(feature = "from_sgf")]
-#[cfg(feature = "from_sgf_cli")]
 fn sgf_parse_point_to_goban_coord(point: &sgf_parse::go::Point) -> tiny_goban::Coord {
     use tiny_goban::Coord;
 
@@ -647,7 +641,6 @@ fn sgf_parse_point_to_goban_coord(point: &sgf_parse::go::Point) -> tiny_goban::C
 }
 
 #[cfg(feature = "from_sgf")]
-#[cfg(feature = "from_sgf_cli")]
 fn goban_to_pattern(goban: &tiny_goban::Goban) -> Pattern {
     let pattern_src = goban
         .points_iter()

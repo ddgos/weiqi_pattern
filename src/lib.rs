@@ -2,7 +2,11 @@ use std::{iter::zip, num::ParseIntError, str::FromStr};
 
 use vec2d::{Coord, Rect, Size, Vec2D};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Player {
     Black,
     White,
@@ -20,6 +24,7 @@ impl Player {
 pub type Intersection = Option<Player>;
 
 #[derive(Clone, Debug, PartialEq, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Edges {
     pub north: bool,
     pub east: bool,
@@ -47,6 +52,7 @@ impl Transform for Edges {
 }
 
 #[derive(PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Pattern {
     pub edges: Edges,
     pub pattern: Vec2D<Intersection>,
@@ -416,7 +422,7 @@ pub struct PatternVariator {
 }
 
 impl PatternVariator {
-    fn all() -> [PatternVariator; 16] {
+    const fn all() -> [PatternVariator; 16] {
         [
             PatternVariator {
                 swap_colours: false,
@@ -678,8 +684,9 @@ mod tests {
 
     #[test]
     fn good_pattern_repr_works() {
-        let pattern_str =
-            concat!("ne;8;5;", "........", ".o......", "...oo...", "..xxx...", "........");
+        let pattern_str = concat!(
+            "ne;8;5;", "........", ".o......", "...oo...", "..xxx...", "........"
+        );
         let parsed_pattern: Pattern = pattern_str.parse().unwrap();
         let pattern_repr = parsed_pattern.repr();
 
